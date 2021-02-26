@@ -1,0 +1,238 @@
+<!doctype html>
+
+<html lang="en">
+    <head>
+      <meta charset="utf-8">
+
+      <title>Devo Test</title>
+      <meta name="description" content="Devo Javascript test by Carlos Marzal">
+
+      <script src="http://code.highcharts.com/highcharts.js"></script>
+      <script src="https://code.highcharts.com/modules/series-label.js"></script>
+      <script src="http://code.highcharts.com/modules/exporting.js"></script>
+
+    </head>
+
+    <body>
+    
+      <div id="chart1" style="min-width: 310px; height: 400px; max-width: 600px; margin: 0 auto"></div>
+      <div id='chart2' style="min-width: 400px; height: 400px; max-width: 1000px; margin: 0 auto"> </div>
+    
+      <script>
+        
+        function multiSort(array, sortObject = {}) {
+            const sortKeys = Object.keys(sortObject);
+
+            // Return array if no sort object is supplied.
+            if (!sortKeys.length) {
+                return array;
+            }
+
+            // Change the values of the sortObject keys to -1, 0, or 1.
+            for (let key in sortObject) {
+                sortObject[key] = sortObject[key] === 'desc' || sortObject[key] === -1 ? -1 : (sortObject[key] === 'skip' || sortObject[key] === 0 ? 0 : 1);
+            }
+
+            const keySort = (a, b, direction) => {
+                direction = direction !== null ? direction : 1;
+
+                if (a === b) { // If the values are the same, do not switch positions.
+                    return 0;
+                }
+
+                // If b > a, multiply by -1 to get the reverse direction.
+                return a > b ? direction : -1 * direction;
+            };
+
+            return array.sort((a, b) => {
+                let sorted = 0;
+                let index = 0;
+
+                // Loop until sorted (-1 or 1) or until the sort keys have been processed.
+                while (sorted === 0 && index < sortKeys.length) {
+                    const key = sortKeys[index];
+
+                    if (key) {
+                        const direction = sortObject[key];
+
+                        sorted = keySort(a[key], b[key], direction);
+                        index++;
+                    }
+                }
+
+                return sorted;
+            });
+        }
+        var da = new Array();
+        
+        function fetchJSONFile(path, callback) {
+            var httpRequest = new XMLHttpRequest();
+            httpRequest.onreadystatechange = function() {
+                if (httpRequest.readyState === 4) {
+                    if (httpRequest.status === 200) {
+                        var data = JSON.parse(httpRequest.responseText);
+                        if (callback) callback(data);
+                    }
+                }
+            };
+            httpRequest.open('GET', path);
+            httpRequest.send(); 
+        }
+
+        //   format series 1 of JSON
+        fetchJSONFile('http://s3.amazonaws.com/logtrust-static/test/test/data1.json', function(data){
+            
+            var i;
+            for(i = 0; i < data.length; i++){
+                data[i].cat = data[i]['cat'].toUpperCase();
+                data[i].date = data[i]['d'];
+                delete data[i].d;
+            }
+            da = data.slice();
+            //format series 2 of JSON
+            fetchJSONFile('http://s3.amazonaws.com/logtrust-static/test/test/data2.json', function(data){
+                var i;
+                for(i = 0; i < data.length; i++){
+                    da.push({cat: data[i]['categ'].toUpperCase(), value: data[i]['val'], date: (new Date(data[i]['myDate'])).getTime() })
+                }
+            //   format series 3 of JSON
+                fetchJSONFile('http://s3.amazonaws.com/logtrust-static/test/test/data3.json', function(data){
+           
+                    var i;
+                    for(i = 0; i < data.length; i++){
+                        //obtain date format from raw
+                        var ds = data[i]['raw'].match(/\d{4}([\/.-])\d{2}\1\d{2}/g)[0];
+                        data[i].date = ds
+                        //obtain category from raw
+                        var categ = (data[i]['raw']).split("#")[1].toUpperCase();
+                        da.push({cat: categ, value: data[i]['val'], date: (new Date(ds)).getTime() })
+                    }
+                    
+                    var daline = new Array();
+                    var dapie = new Array();
+                    
+                    var i;
+                    
+                    daline.push({cat: da[0]['cat'], value: da[0]['value'], date: da[0]['date'] });
+                    dapie.push({cat: da[0]['cat'], value: da[0]['value']});
+                    
+                    //Create fill datasets for both charts
+                    for(i = 1; i < da.length; i++){
+                        var e;
+                        var ne = true;
+                        for(e = 0; e < dapie.length; e++){
+                            if(da[i]['cat'] == dapie[e]['cat']){
+                                dapie[e].value += da[i]['value'];
+                                ne = false;
+                            }
+                        }
+                        if(ne == true){dapie.push({cat: da[i]['cat'], value: da[i]['value']});}
+                        
+                        var ne2 = true
+                        for(e = 0; e < daline.length; e++){
+                            if((da[i]['cat'] == daline[e]['cat']) && (da[i]['date'] == daline[e]['date'])){
+                                daline[e].value += da[i]['value'];
+                                ne2 = false;
+                            }
+                        }
+                        if(ne2 == true){
+                        daline.push({cat: da[i]['cat'], value: da[i]['value'], date: da[i]['date'] });
+                        }
+                        
+                    } 
+                    var piedata = new Array();
+                    var total = 0;
+                    for(var i=0; i < dapie.length; i++) {
+                            total +=  dapie[i]['value']	;	    
+                    };
+                    
+                    //Fill pie chart dataset with percentage
+                    for(var i=0; i < dapie.length; i++) {
+                        piedata.push({
+                            name: dapie[i]['cat'],
+                            y: (dapie[i]['value']/total)*100
+                        }); 	   
+                    };
+                    
+                    //create pie chart
+                    Highcharts.chart('chart1', {
+                      chart: {
+                        plotBackgroundColor: null,
+                        plotBorderWidth: null,
+                        plotShadow: false,
+                        type: 'pie'
+                      },
+                      title: {
+                        text: 'Devo test pie chart'
+                      },
+                      tooltip: {
+                        pointFormat: '<b>{point.percentage:.1f}%</b>'
+                      },
+                      accessibility: {
+                        point: {
+                          valueSuffix: '%'
+                        }
+                      },
+                      plotOptions: {
+                        pie: {
+                          allowPointSelect: true,
+                          cursor: 'pointer',
+                          dataLabels: {
+                            enabled: false
+                          },
+                          showInLegend: true
+                        }
+                      },
+                      series: [{
+                        colorByPoint: true,
+                        data: piedata
+                      }]
+                    });
+                    
+                    //sort line chart dataset by date
+                    daline = multiSort(daline, {date: 'asc'})
+                    var linedata = new Array();
+                    
+                    //format line chart dataset
+                    for(var i=0; i < dapie.length; i++) {
+                        dapie[i]['cat']
+                        var e;
+                        var temp = new Array()
+                        for(var e=0; e < daline.length; e++) {
+                            if(daline[e].cat == dapie[i]['cat']){
+                                temp.push([daline[e].date, daline[e].value]);
+                            }
+                        }
+                        linedata.push({name: dapie[i]['cat'], data: temp });        
+                    };
+                    
+                    //create line graph with options
+                    Highcharts.chart('chart2', {
+                        title: {
+                            text: 'Devo test line graph'
+                        },
+                        legend: {
+                            layout: 'vertical',
+                            align: 'right',
+                            verticalAlign: 'middle'
+                        },
+                        plotOptions: {
+                            series: {
+                                marker: {
+                                    radius: 3
+                                }
+                            }
+                        },
+
+                        series: linedata,
+                        xAxis: {
+                            type: "datetime",
+                        },
+                    });
+                });
+            });
+        });
+
+      </script>
+    </body>
+</html>
